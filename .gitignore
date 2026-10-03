@@ -22,3 +22,7 @@ __pycache__/
 # Node
 node_modules/
 package-lock.json
+
+# Edge 配置备份（含个人数据，绝不入库）
+.backup-edge-prefs/
+
