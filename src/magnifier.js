@@ -628,6 +628,15 @@
     try {
       chrome.storage.onChanged.addListener(onStorageChanged);
     } catch (_) {}
+    try {
+      // 供后台确认「本页引擎是否活着」—— 自愈注入靠它判断
+      chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+        if (msg && msg.type === 'alt-magnifier:ping') {
+          sendResponse({ ok: true, active: active, k: k });
+        }
+        return false;
+      });
+    } catch (_) {}
 
     S.get((loaded) => {
       cfg = loaded;

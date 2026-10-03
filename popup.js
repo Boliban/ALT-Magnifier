@@ -203,25 +203,91 @@ el.selftest.addEventListener('click', () => {
 });
 
 /* ------------------------------------------------- 启动时的安装健康检查 */
+function activeTab() {
+  return new Promise((res) => {
+    try {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError) return res(null);
+        res((tabs && tabs[0]) || null);
+      });
+    } catch (_) {
+      res(null);
+    }
+  });
+}
+
+function askEnsure(tabId) {
+  return new Promise((res) => {
+    try {
+      chrome.runtime.sendMessage({ type: 'alt-magnifier:ensure', tabId, allFrames: true }, (reply) => {
+        if (chrome.runtime.lastError) {
+          return res({ ok: false, detail: '后台没有响应：' + chrome.runtime.lastError.message });
+        }
+        res(reply || { ok: false, detail: '后台返回为空' });
+      });
+    } catch (err) {
+      res({ ok: false, detail: '调用后台失败：' + ((err && err.message) || err) });
+    }
+  });
+}
+
+function fileAccessAllowed() {
+  return new Promise((res) => {
+    try {
+      if (!chrome.extension || !chrome.extension.isAllowedFileSchemeAccess) return res(null);
+      chrome.extension.isAllowedFileSchemeAccess((v) => res(!!v));
+    } catch (_) {
+      res(null);
+    }
+  });
+}
+
 (async function boot() {
   const cfg = await new Promise((res) => S.get(res));
   paint(cfg);
 
-  const problems = [];
-  if (!cfg.enabled) problems.push('扩展当前是「已停用」状态，请在右上角打开开关。');
+  if (!cfg.enabled) {
+    setStatus('扩展当前是「已停用」状态，请打开右上角开关。', 'bad');
+    return;
+  }
 
-  try {
-    if (chrome.extension && chrome.extension.isAllowedFileSchemeAccess) {
-      const allowed = await new Promise((res) => chrome.extension.isAllowedFileSchemeAccess(res));
-      if (!allowed) {
-        problems.push('没有获取 file:// 访问权限：双击打开 test-page.html 时扩展不会生效。');
-      }
+  // 关键一步：让后台对「当前这个标签页」做一次注入确认。
+  // 这一步不依赖 manifest 里的声明式内容脚本，所以即使声明式注入失效也能救回来。
+  const tab = await activeTab();
+  const allowed = await fileAccessAllowed();
+
+  if (!tab || tab.id == null) {
+    setStatus('当前不是普通网页（扩展页 / edge:// / 新标签页），没法注入。打开一个网站再点这里。', 'bad');
+    return;
+  }
+
+  setStatus('正在确认本页引擎状态…');
+  const res = await askEnsure(tab.id);
+  const host = (() => {
+    try {
+      return new URL(tab.url).host || tab.url;
+    } catch (_) {
+      return tab.url || '当前页';
     }
-  } catch (_) {}
+  })();
 
-  if (problems.length) {
-    setStatus(problems.join(' '), 'bad');
+  if (res.ok) {
+    setStatus('✓ ' + host + ' 引擎已就绪：按住 Alt + 滚轮即可放大。（' + res.detail + '）', 'ok');
   } else {
-    setStatus('就绪：在任意网页按住 Alt + 滚轮即可放大。', 'ok');
+    const extra =
+      allowed === false && /^file:/i.test(tab.url || '')
+        ? ' 注意：本页是 file:// 且扩展没有文件访问权限 —— 请在扩展详情页打开「允许访问文件 URL」。'
+        : '';
+    setStatus('✗ ' + host + ' 引擎没起来。' + res.detail + extra, 'bad');
+    el.out.hidden = false;
+    el.out.className = 'out bad';
+    el.out.textContent =
+      '注入失败详情\n' +
+      '────────────\n' +
+      '标签页 : ' + (tab.url || '未知') + '\n' +
+      '后台返回: ' + res.detail + '\n' +
+      (allowed === null ? '' : 'file:// 权限: ' + (allowed ? '已允许' : '未允许') + '\n') +
+      '\n如果上面写着「注入被浏览器拒绝」，把那句话原样发我，\n' +
+      '它通常直接指出原因（企业策略 / 页面受限 / 权限不足）。';
   }
 })();
