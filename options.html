@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ALT Magnifier — 设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo">ALT</span>
+        <div>
+          <h1>ALT Magnifier</h1>
+          <p class="sub">按住 <kbd>Alt</kbd> + 滚轮，像放大图片一样整体放大网页，元素位置不位移。</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="status" class="status">已同步</span>
+        <button id="reset" class="btn ghost" type="button">恢复默认</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>基本</h2>
+        <label class="row">
+          <span class="label">启用扩展<em>关闭后内容脚本完全不动页面</em></span>
+          <input type="checkbox" data-key="enabled" />
+        </label>
+        <label class="row">
+          <span class="label">触发键<em>默认 Alt；换成 Ctrl 会覆盖浏览器缩放，请谨慎</em></span>
+          <select data-key="modifier">
+            <option value="alt">Alt</option>
+            <option value="ctrl">Ctrl</option>
+            <option value="meta">Win / Meta</option>
+            <option value="shift">Shift</option>
+          </select>
+        </label>
+        <label class="row">
+          <span class="label">滚轮方向<em>默认向下滚 = 放大</em></span>
+          <select data-key="invert">
+            <option value="false">向下滚 = 放大</option>
+            <option value="true">向下滚 = 缩小</option>
+          </select>
+        </label>
+        <label class="row">
+          <span class="label">HUD 倍率角标<em>右上角显示 ×N，1 秒后自动淡出</em></span>
+          <input type="checkbox" data-key="indicator" />
+        </label>
+        <label class="row">
+          <span class="label">松手后自动落定<em>松开触发键后多少毫秒还原（0 = 必须按 Esc）</em></span>
+          <span class="with-unit"><input type="number" data-key="settleDelay" min="0" max="5000" step="50" /><i>ms</i></span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>缩放范围</h2>
+        <label class="row">
+          <span class="label">每格步长<em>乘法步进，1.12 ≈ 每格 +12%</em></span>
+          <input type="number" data-key="step" min="1.02" max="2" step="0.01" />
+        </label>
+        <label class="row">
+          <span class="label">最小倍率</span>
+          <input type="number" data-key="min" min="0.25" max="32" step="0.25" />
+        </label>
+        <label class="row">
+          <span class="label">最大倍率<em>上限 32（浏览器渲染上限，再高会掉帧）</em></span>
+          <input type="number" data-key="max" min="1" max="32" step="0.5" />
+        </label>
+        <p class="note">
+          默认 1–32 倍。32 倍时一屏只显示页面的 1/32，靠滚动条或
+          <kbd>Esc</kbd> 退出。如果最小倍率大于最大倍率，滚轮方向会整体反转。
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>兼容性</h2>
+        <label class="row">
+          <span class="label">
+            修复 <code>background-attachment: fixed</code> 大背景
+            <em>放大期间临时改成 scroll，退出时精确还原。B站图文页那类「大模糊背景」靠它对齐</em>
+          </span>
+          <input type="checkbox" data-key="fixFixedBackgrounds" />
+        </label>
+        <label class="row">
+          <span class="label">站点规则<em>黑名单 = 这些站点不放大；白名单 = 只在这些站点放大</em></span>
+          <select data-key="siteMode">
+            <option value="all">所有网站</option>
+            <option value="blacklist">排除以下网站</option>
+            <option value="whitelist">仅以下网站</option>
+          </select>
+        </label>
+        <label class="col">
+          <span class="label">站点列表<em>一行一个，支持 example.com、*.example.com、re:正则</em></span>
+          <textarea data-key="siteList" rows="4" spellcheck="false" placeholder="example.com&#10;*.bilibili.com"></textarea>
+        </label>
+        <label class="row">
+          <span class="label">调试日志<em>在页面控制台输出 [ALT Magnifier] 日志</em></span>
+          <input type="checkbox" data-key="debug" />
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>就地试一下</h2>
+        <p class="note">
+          下面这块是设置页自己的内容（它不在 http/https 里，内容脚本本来不会注入），
+          所以扩展对设置页也做了支持 —— 在这里按住 <kbd>Alt</kbd> 滚轮同样能放大，
+          可以当成第一个练手靶子。真正完整的验收用例请用页面底部的「打开完整验收页」。
+          把鼠标停在某一行字上，按住 <kbd>Alt</kbd> 向下滚 ——
+          那一行字必须纹丝不动，只有周围的内容向外扩张。<kbd>Esc</kbd> 还原，<kbd>Alt</kbd>+<kbd>0</kbd> 回到按 Alt 时的原地。
+        </p>
+        <div class="preview" id="preview">
+          <div class="pbody">
+            <h3>排版细节测试</h3>
+            <p>
+              文字 <em>斜体</em>、<strong>粗体</strong>、<code>等宽代码</code>、<a href="#">链接</a>、
+              <span class="hl">高亮</span>、<sub>下</sub><sup>上</sup>标，以及 0O1lI| 这类易混字符。
+              放大时这些字形的相对位置必须完全不变。
+            </p>
+            <div class="prow">
+              <div class="pbox">
+                <canvas id="pcanvas" width="220" height="90"></canvas>
+                <small>canvas</small>
+              </div>
+              <div class="pbox">
+                <svg viewBox="0 0 220 90" width="220" height="90" aria-hidden="true">
+                  <rect x="4" y="4" width="212" height="82" rx="8" fill="none" stroke="#7aa2ff" stroke-width="2" />
+                  <circle cx="60" cy="45" r="26" fill="rgba(122,162,255,.35)" stroke="#7aa2ff" stroke-width="2" />
+                  <path d="M12 78 L70 22 L128 62 L210 14" fill="none" stroke="#ffb04a" stroke-width="2" />
+                </svg>
+                <small>svg</small>
+              </div>
+              <div class="pbox bigbg">
+                <span>background-attachment: fixed</span>
+                <small>大背景（已开启修复时应与框对齐）</small>
+              </div>
+            </div>
+            <ul class="plist">
+              <li>列表项一 —— 应保持行高与项目符号对齐</li>
+              <li>列表项二 —— 应保持行高与项目符号对齐</li>
+              <li>列表项三 —— 应保持行高与项目符号对齐</li>
+            </ul>
+            <div class="psticky"><b>position: sticky</b> 的块</div>
+            <p class="pspacer">
+              ↓ 上下留白，用来验证「放大后滚动条仍然能到达页面底部」↓<br /><br />
+              真正完整的验收用例（fixed 顶栏、fixed 悬浮球、sticky 侧栏、iframe、视频、长文）
+              在扩展目录的 <code>test/test-page.html</code>。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>关键快捷键</h2>
+        <table class="keys">
+          <tr><td><kbd>Alt</kbd> + 滚轮</td><td>以鼠标指针为锚点放大 / 缩小</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>在原位直接还原（保留你放大后滚到的位置）</td></tr>
+          <tr><td><kbd>Alt</kbd> + <kbd>0</kbd></td><td>回到按下 Alt 时的原地</td></tr>
+          <tr><td>松开 <kbd>Alt</kbd></td><td>默认 600ms 后自动还原</td></tr>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>验收与自检</h2>
+        <p class="note">
+          完整的人工验收用例（fixed 顶栏、sticky 侧栏、大背景、内嵌滚动容器、iframe、canvas、长文）
+          在扩展目录的 <code>test/test-page.html</code>。它自带漂移检测面板，会用几何关系算出
+          「哪些元素位移了多少像素」，不需要靠眼睛比对。
+        </p>
+        <div class="row">
+          <span class="label">核心数学自检<em>不需要鼠标，纯计算：锚点是否零漂移、倍率钳制、边界钳制</em></span>
+          <button id="selftest" class="btn" type="button">运行自检</button>
+        </div>
+        <div class="row">
+          <span class="label">打开完整验收页<em>需要先在 edge://extensions 打开「允许访问文件 URL」</em></span>
+          <a class="btn" id="testlink" href="test/test-page.html" target="_blank" rel="noreferrer">打开 test-page.html</a>
+        </div>
+        <pre id="selftest-out" class="selftest" hidden></pre>
+      </section>
+    </main>
+
+    <script src="src/settings.js"></script>
+    <script src="src/math.js"></script>
+    <script src="src/hud.js"></script>
+    <script src="src/magnifier.js"></script>
+    <script src="selftest.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

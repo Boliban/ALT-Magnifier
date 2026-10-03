@@ -1,0 +1,24 @@
+# 临时/本地文件
+.tmp-*
+*.log
+*.tmp
+
+# 打包产物（用 edge://extensions 的「打包扩展」生成，不入库）
+*.crx
+*.pem
+dist/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Python 缓存（tools/make_icons.py）
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+package-lock.json
