@@ -508,6 +508,13 @@
     if (e.key === '0' && modifierDown(e)) {
       e.preventDefault();
       restoreView();
+      return;
+    }
+    // Alt + W：不依赖滚轮的开关（用于滚轮本身有问题、或想快速验证引擎是否活着）
+    if ((e.key === 'w' || e.key === 'W') && modifierDown(e) && !e.repeat) {
+      e.preventDefault();
+      if (active) endMagnify();
+      else beginMagnify();
     }
   }
 
@@ -629,10 +636,57 @@
       chrome.storage.onChanged.addListener(onStorageChanged);
     } catch (_) {}
     try {
-      // 供后台确认「本页引擎是否活着」—— 自愈注入靠它判断
+      // 供后台确认「本页引擎是否活着」+ 导出运行时状态用于排障
       chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-        if (msg && msg.type === 'alt-magnifier:ping') {
+        if (!msg || typeof msg.type !== 'string') return false;
+        if (msg.type === 'alt-magnifier:ping') {
           sendResponse({ ok: true, active: active, k: k });
+          return false;
+        }
+        if (msg.type === 'alt-magnifier:dump') {
+          let storage = null;
+          try {
+            storage = {
+              enabled: cfg.enabled,
+              modifier: cfg.modifier,
+              step: cfg.step,
+              min: cfg.min,
+              max: cfg.max,
+              invert: cfg.invert,
+              indicator: cfg.indicator,
+              settleDelay: cfg.settleDelay,
+              siteMode: cfg.siteMode,
+              siteList: cfg.siteList,
+            };
+          } catch (_) {}
+          let foundKeys = null;
+          try {
+            foundKeys = Object.keys(localStorage).filter((x) => x.indexOf('magnifier') >= 0);
+          } catch (_) {}
+          sendResponse({
+            ok: true,
+            href: location.href,
+            host: location.hostname,
+            isTop: window.top === window.self,
+            siteOK: siteOK,
+            enabled: cfg.enabled,
+            modifier: cfg.modifier,
+            active: active,
+            k: k,
+            modifierDown: keyDown,
+            anchor: anchor ? { x: anchor.x, y: anchor.y } : null,
+            listenersAttached: activeAttached,
+            storage: storage,
+            rootTransform: ROOT ? ROOT.style.getPropertyValue('transform') : null,
+            localStorageKeys: foundKeys,
+          });
+          return false;
+        }
+        if (msg.type === 'alt-magnifier:toggle') {
+          if (active) endMagnify();
+          else beginMagnify();
+          sendResponse({ ok: true, active: active, k: k });
+          return false;
         }
         return false;
       });

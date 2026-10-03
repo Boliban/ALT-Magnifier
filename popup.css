@@ -81,6 +81,8 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; backgr
 .link:last-of-type { margin-left: auto; }
 
 footer { display: flex; gap: 8px; margin-top: 14px; }
+footer.tight { margin-top: 8px; }
+footer.tight button { font-size: 12px; }
 button.primary, button.ghost {
   flex: 1;
   padding: 7px 10px;

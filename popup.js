@@ -18,6 +18,8 @@ const el = {
   copied: document.getElementById('p-copied'),
   options: document.getElementById('p-options'),
   selftest: document.getElementById('p-selftest'),
+  dump: document.getElementById('p-dump'),
+  toggle: document.getElementById('p-toggle'),
   out: document.getElementById('p-out'),
 };
 
@@ -200,6 +202,84 @@ el.selftest.addEventListener('click', () => {
   el.out.className = 'out ' + (fail ? 'bad' : 'ok');
   el.out.textContent =
     (fail ? '✗ ' + fail + ' 项失败 / 共 ' + (pass + fail) + ' 项' : '✓ 全部 ' + pass + ' 项通过') + '\n\n' + lines.join('\n');
+});
+
+/* ------------------------------------------------- 导出运行状态 / 强制开关 */
+function ask(msg) {
+  return new Promise((res) => {
+    try {
+      chrome.runtime.sendMessage(msg, (reply) => {
+        if (chrome.runtime.lastError) {
+          return res({ ok: false, detail: '后台没有响应：' + chrome.runtime.lastError.message });
+        }
+        res(reply || { ok: false, detail: '后台返回为空' });
+      });
+    } catch (err) {
+      res({ ok: false, detail: '调用后台失败：' + ((err && err.message) || err) });
+    }
+  });
+}
+
+function showReport(title, text, kind) {
+  el.out.hidden = false;
+  el.out.className = 'out ' + (kind || '');
+  el.out.textContent = title + '\n' + '─'.repeat(28) + '\n' + text;
+}
+
+el.dump.addEventListener('click', async () => {
+  const tab = await activeTab();
+  if (!tab || tab.id == null) {
+    setStatus('当前不是普通网页，没有可导出的状态。', 'bad');
+    return;
+  }
+  const res = await ask({ type: 'alt-magnifier:dump', tabId: tab.id });
+  if (!res || !res.ok) {
+    setStatus('导出失败：' + ((res && res.detail) || '未知'), 'bad');
+    return;
+  }
+  const lines = [
+    '页面      : ' + res.href,
+    '顶层文档  : ' + (res.isTop ? '是' : '否（iframe）'),
+    '站点被允许: ' + res.siteOK + '（黑名单/白名单规则）',
+    '扩展启用  : ' + res.enabled,
+    '触发键    : ' + res.modifier,
+    '正在放大  : ' + res.active + '  当前倍率 k = ' + (typeof res.k === 'number' ? res.k.toFixed(3) : res.k),
+    '触发键按下: ' + res.modifierDown + '（按下 Alt 时点本按钮可看到它变 true）',
+    '根元素样式: ' + JSON.stringify(res.rootTransform),
+    '发动机设置: ' + JSON.stringify(res.storage),
+  ];
+  showReport('运行状态导出（把这段发我）', lines.join('\n'), 'ok');
+  setStatus('已导出。若「触发键按下」在按住 Alt 时为 false，问题就在键盘事件上。', 'ok');
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    setStatus('已导出并复制到剪贴板，直接粘贴给我即可。', 'ok');
+  } catch (_) {}
+});
+
+el.toggle.addEventListener('click', async () => {
+  const tab = await activeTab();
+  if (!tab || tab.id == null) {
+    setStatus('当前不是普通网页，无法强制开关。', 'bad');
+    return;
+  }
+  const res = await ask({ type: 'alt-magnifier:toggle', tabId: tab.id });
+  if (res && res.ok) {
+    setStatus(res.active ? '✓ 已强制开启放大（应能立刻看到页面被放大）' : '✓ 已关闭放大', 'ok');
+    showReport(
+      '强制开关结果',
+      '引擎响应正常，active = ' + res.active + '，k = ' + (typeof res.k === 'number' ? res.k.toFixed(3) : res.k) + '\n\n' +
+        (res.active
+          ? '这说明引擎和渲染链路都没问题：\n' +
+            '· 如果页面确实被放大了 → 问题只出在「Alt + 滚轮」这个触发条件上\n' +
+            '  （多半是触发键被改成了别的键，看上面导出的「触发键」字段）\n' +
+            '· 如果页面没有任何变化 → 问题在渲染通道上，请把这段发我'
+          : '已关闭。'),
+      res.active ? 'ok' : ''
+    );
+  } else {
+    setStatus('强制开关失败：' + ((res && res.detail) || '未知'), 'bad');
+    showReport('强制开关失败', JSON.stringify(res, null, 2), 'bad');
+  }
 });
 
 /* ------------------------------------------------- 启动时的安装健康检查 */
