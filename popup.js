@@ -277,8 +277,27 @@ el.toggle.addEventListener('click', async () => {
       res.active ? 'ok' : ''
     );
   } else {
+    const e = await ask({ type: 'alt-magnifier:lastError' });
+    const err = e && e.ok ? e.error : null;
     setStatus('强制开关失败：' + ((res && res.detail) || '未知'), 'bad');
-    showReport('强制开关失败', JSON.stringify(res, null, 2), 'bad');
+    showReport(
+      '强制开关失败（把这段发我）',
+      '失败原因: ' + ((res && res.detail) || '未知') +
+        '\n\n' +
+        (err
+          ? '内容脚本上报的异常:\n' +
+            '  位置: ' + err.where + '\n' +
+            '  原因: ' + err.detail + '\n' +
+            '  页面: ' + err.url + '\n' +
+            (err.stack ? '  堆栈: ' + err.stack.split('\n').slice(0, 4).join('\n        ') : '')
+          : '没有捕获到内容脚本异常 —— 说明问题更可能在后台/消息通道本身。\n' +
+            '请改为在网页上按 Alt+W 试试，然后点「导出运行状态」。'),
+      'bad'
+    );
+    try {
+      await navigator.clipboard.writeText(JSON.stringify({ res, err }, null, 2));
+      setStatus('失败详情已复制到剪贴板。', 'bad');
+    } catch (_) {}
   }
 });
 

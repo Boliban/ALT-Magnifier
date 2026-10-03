@@ -57,7 +57,9 @@
   let target = null;
   let settleTimer = 0;
   let keyDown = false;
-  let lastPointer = { x: 0, y: 0 };
+  // 初始锚点取视口中心而不是 (0,0)：用户可能先按 Alt+W（没滚过滚轮），
+  // 若锚点是左上角，放大就会从屏幕边缘开始，观感很怪。
+  let lastPointer = { x: -1, y: -1 };
 
   let rootOrig = null; // 根元素内联样式原值快照
   const overlayOrig = []; // 被覆写的 background-attachment 原值
@@ -85,6 +87,19 @@
     try {
       console.log.apply(console, ['[ALT Magnifier]'].concat([].slice.call(arguments)));
     } catch (_) {}
+  }
+
+  /** 把异常上报给后台（后台会缓存，面板里能看到原文），同时打到控制台。
+   *  之前这里没有兜底，异常会静默吃掉，表现就是「按了完全没反应」。 */
+  function reportError(where, err) {
+    const detail = (err && err.name ? err.name + ': ' : '') + ((err && err.message) || String(err));
+    try {
+      console.error('[ALT Magnifier] ' + where + ' 出错：' + detail, err);
+    } catch (_) {}
+    try {
+      chrome.runtime.sendMessage({ type: 'alt-magnifier:error', where: where, detail: detail, stack: (err && err.stack) || null });
+    } catch (_) {}
+    return detail;
   }
 
   // ------------------------------------------------- 根元素样式：写入 / 精确还原
@@ -233,6 +248,44 @@
     return Math.max(cfg.min, cfg.max);
   }
 
+  /* ------------------------------------------------------------ 渲染卡死保护
+   * 极端情况：页面有巨型合成层或大量 fixed/blur 元素时，Chromium 重新栅格化
+   * 放大后的内容可能耗时几百毫秒甚至卡住。用户看到的就是「按了没反应」。
+   * 这里用两帧之间的时间差做判据：
+   *   - 超过 60ms   → 降低动画精度，直接跳到目标值，少画几帧
+   *   - 超过 300ms  → 判定为渲染吃不住，主动退出并给出提示
+   * 代价是每帧两次 performance.now()，可以忽略。 */
+  let lastRafTs = 0;
+  let slowStreak = 0;
+  let stalled = false;
+
+  function frameGuard() {
+    const nowTs = now();
+    const delta = lastRafTs ? nowTs - lastRafTs : 0;
+    lastRafTs = nowTs;
+    if (delta > 300) {
+      slowStreak++;
+      if (slowStreak >= 2) {
+        if (!stalled) {
+          stalled = true;
+          reportError('render-stall', new Error('放大后渲染耗时 ' + Math.round(delta) + 'ms，已自动退出以避免把页面拖死'));
+          try {
+            endMagnify();
+          } catch (_) {}
+          if (HUD && cfg.indicator) {
+            try {
+              HUD.show(1, 1, true, ' 渲染过慢，已退出');
+            } catch (_) {}
+          }
+        }
+        return false;
+      }
+    } else if (delta < 120) {
+      slowStreak = 0;
+    }
+    return true;
+  }
+
   /** 单步滚轮后的目标倍率。末尾的吸附用于消掉浮点残留
    *  （1 / 1.12 * 1.12 在浮点下不严格等于 1）。与 src/math.js 保持一致。 */
   function nextScale(cur, dir) {
@@ -300,6 +353,7 @@
 
   function applyScale(nk) {
     if (!active || !anchor) return;
+    if (!frameGuard()) return;
     const sc = scroller();
     const ax = anchor.x;
     const ay = anchor.y;
@@ -348,8 +402,8 @@
     const sc = scroller();
     active = true;
     anchor = {
-      x: lastPointer.x,
-      y: lastPointer.y,
+      x: lastPointer.x >= 0 ? lastPointer.x : window.innerWidth / 2,
+      y: lastPointer.y >= 0 ? lastPointer.y : window.innerHeight / 2,
       sx: sc.scrollLeft,
       sy: sc.scrollTop,
       k: 1, // 进入时永远是 1x，基准直接取未缩放文档坐标，最稳
@@ -487,17 +541,20 @@
       if (!active) return;
     }
 
-    const base = target === null ? k : target;
-    pushTarget(nextScale(base, dir));
+    try {
+      const base = target === null ? k : target;
+      pushTarget(nextScale(base, dir));
+    } catch (err) {
+      reportError('wheel', err);
+    }
     scheduleSettle();
   }
 
   function onKeyDown(e) {
     if (isModifierKey(e)) {
-      if (keyDown) return;
+      // 注意：这里绝对不能动 lastPointer —— 它保存的是鼠标真实位置，
+      // 是「以鼠标为锚点」的唯一来源。覆盖它会让放大锚点跑到屏幕中心。
       keyDown = true;
-      lastPointer.x = window.innerWidth / 2;
-      lastPointer.y = window.innerHeight / 2;
       return;
     }
     if (e.key === 'Escape' && active) {
@@ -513,8 +570,12 @@
     // Alt + W：不依赖滚轮的开关（用于滚轮本身有问题、或想快速验证引擎是否活着）
     if ((e.key === 'w' || e.key === 'W') && modifierDown(e) && !e.repeat) {
       e.preventDefault();
-      if (active) endMagnify();
-      else beginMagnify();
+      try {
+        if (active) endMagnify();
+        else beginMagnify();
+      } catch (err) {
+        reportError('Alt+W', err);
+      }
     }
   }
 
@@ -636,57 +697,72 @@
       chrome.storage.onChanged.addListener(onStorageChanged);
     } catch (_) {}
     try {
-      // 供后台确认「本页引擎是否活着」+ 导出运行时状态用于排障
-      chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      // 供后台确认「本页引擎是否活着」+ 导出运行时状态 + 强制开关，用于排障。
+      // 全部包在 try/catch 里：一旦这里抛异常，sendResponse 不会被调用，
+      // 调用方只会看到 "message port closed"，真正的堆栈就丢了。
+      chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!msg || typeof msg.type !== 'string') return false;
-        if (msg.type === 'alt-magnifier:ping') {
-          sendResponse({ ok: true, active: active, k: k });
+        if (msg.type.indexOf('alt-magnifier:') !== 0) return false;
+        if (sender && sender.frameId != null && sender.frameId !== 0) {
+          sendResponse({ ok: false, detail: 'ignored non-top frame' });
           return false;
         }
-        if (msg.type === 'alt-magnifier:dump') {
-          let storage = null;
-          try {
-            storage = {
+        try {
+          if (msg.type === 'alt-magnifier:ping') {
+            sendResponse({ ok: true, active: active, k: k });
+          } else if (msg.type === 'alt-magnifier:dump') {
+            let storage = null;
+            try {
+              storage = {
+                enabled: cfg.enabled,
+                modifier: cfg.modifier,
+                step: cfg.step,
+                min: cfg.min,
+                max: cfg.max,
+                invert: cfg.invert,
+                indicator: cfg.indicator,
+                settleDelay: cfg.settleDelay,
+                siteMode: cfg.siteMode,
+                siteList: cfg.siteList,
+              };
+            } catch (_) {}
+            let foundKeys = null;
+            try {
+              foundKeys = Object.keys(localStorage).filter((x) => x.indexOf('magnifier') >= 0);
+            } catch (_) {}
+            sendResponse({
+              ok: true,
+              href: location.href,
+              host: location.hostname,
+              isTop: window.top === window.self,
+              siteOK: siteOK,
               enabled: cfg.enabled,
               modifier: cfg.modifier,
-              step: cfg.step,
-              min: cfg.min,
-              max: cfg.max,
-              invert: cfg.invert,
-              indicator: cfg.indicator,
-              settleDelay: cfg.settleDelay,
-              siteMode: cfg.siteMode,
-              siteList: cfg.siteList,
-            };
-          } catch (_) {}
-          let foundKeys = null;
+              active: active,
+              k: k,
+              modifierDown: keyDown,
+              anchor: anchor ? { x: anchor.x, y: anchor.y } : null,
+              listenersAttached: activeAttached,
+              storage: storage,
+              rootTransform: ROOT ? ROOT.style.getPropertyValue('transform') : null,
+              localStorageKeys: foundKeys,
+            });
+          } else if (msg.type === 'alt-magnifier:toggle') {
+            if (active) endMagnify();
+            else beginMagnify();
+            sendResponse({ ok: true, active: active, k: k });
+          } else {
+            sendResponse({ ok: false, detail: 'unknown message: ' + msg.type });
+          }
+        } catch (err) {
+          const detail = (err && err.name ? err.name + ': ' : '') + ((err && err.message) || String(err));
+          // 双保险：立刻主动上报一次，即使 sendResponse 因端口问题丢失也能拿到原因
           try {
-            foundKeys = Object.keys(localStorage).filter((x) => x.indexOf('magnifier') >= 0);
+            chrome.runtime.sendMessage({ type: 'alt-magnifier:error', where: msg.type, detail: detail });
           } catch (_) {}
-          sendResponse({
-            ok: true,
-            href: location.href,
-            host: location.hostname,
-            isTop: window.top === window.self,
-            siteOK: siteOK,
-            enabled: cfg.enabled,
-            modifier: cfg.modifier,
-            active: active,
-            k: k,
-            modifierDown: keyDown,
-            anchor: anchor ? { x: anchor.x, y: anchor.y } : null,
-            listenersAttached: activeAttached,
-            storage: storage,
-            rootTransform: ROOT ? ROOT.style.getPropertyValue('transform') : null,
-            localStorageKeys: foundKeys,
-          });
-          return false;
-        }
-        if (msg.type === 'alt-magnifier:toggle') {
-          if (active) endMagnify();
-          else beginMagnify();
-          sendResponse({ ok: true, active: active, k: k });
-          return false;
+          try {
+            sendResponse({ ok: false, detail: detail, stack: (err && err.stack) || null });
+          } catch (_) {}
         }
         return false;
       });

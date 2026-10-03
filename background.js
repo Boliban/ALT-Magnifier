@@ -134,12 +134,43 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 /* ------------------------------------------------------------------ 消息 */
 
+/** 最近一次来自内容脚本的异常（排障用，面板会显示） */
+let lastError = null;
+
+/** 后台自己也被 --load-extension 之外的场景静默杀掉过，所以用 session 存储兜底 */
+function rememberError(rec) {
+  lastError = rec;
+  try {
+    chrome.storage.session.set({ altMagnifierLastError: rec });
+  } catch (_) {}
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg.type !== 'string' || msg.type.indexOf('alt-magnifier:') !== 0) return false;
 
   if (msg.type === 'alt-magnifier:ping') {
     sendResponse({ ok: true, where: sender.frameId === 0 ? 'top' : 'frame:' + sender.frameId });
     return false;
+  }
+
+  if (msg.type === 'alt-magnifier:error') {
+    rememberError({
+      at: Date.now(),
+      where: msg.where,
+      detail: msg.detail,
+      stack: msg.stack ? String(msg.stack).slice(0, 1200) : null,
+      url: sender && sender.tab ? sender.tab.url : null,
+    });
+    console.error('[ALT Magnifier] 内容脚本异常 @' + msg.where + ': ' + msg.detail);
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (msg.type === 'alt-magnifier:lastError') {
+    chrome.storage.session.get('altMagnifierLastError', (data) => {
+      sendResponse({ ok: true, error: lastError || (data && data.altMagnifierLastError) || null });
+    });
+    return true;
   }
 
   if (msg.type === 'alt-magnifier:ensure') {
