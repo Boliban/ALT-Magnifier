@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>ALT Magnifier</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <span class="logo">ALT</span>
+      <div class="titles">
+        <strong>ALT Magnifier</strong>
+        <span class="hint">按住 <kbd>Alt</kbd> + 滚轮放大</span>
+      </div>
+      <label class="switch" title="启用 / 停用">
+        <input type="checkbox" id="p-enabled" />
+        <span></span>
+      </label>
+    </header>
+
+    <section class="grid">
+      <label>
+        <span>最小倍率</span>
+        <input type="number" id="p-min" min="0.25" max="32" step="0.25" />
+      </label>
+      <label>
+        <span>最大倍率</span>
+        <input type="number" id="p-max" min="1" max="32" step="0.5" />
+      </label>
+      <label>
+        <span>每格步长</span>
+        <input type="number" id="p-step" min="1.02" max="2" step="0.01" />
+      </label>
+      <label>
+        <span>触发键</span>
+        <select id="p-modifier">
+          <option value="alt">Alt</option>
+          <option value="ctrl">Ctrl</option>
+          <option value="meta">Win</option>
+          <option value="shift">Shift</option>
+        </select>
+      </label>
+    </section>
+
+    <p class="note" id="p-status">改动立即对所有已打开的标签页生效，不用刷新。</p>
+
+    <section class="test">
+      <div class="test-head">
+        <b>测试页</b>
+        <button class="link" id="p-test" type="button">打开</button>
+        <button class="link" id="p-copy" type="button">复制 http 命令</button>
+      </div>
+      <p class="note">
+        <code>file://</code> 页面需要额外打开「允许访问文件 URL」。最稳的验证方式是在扩展目录执行
+        <code>python -m http.server 8123</code>，然后访问
+        <code>http://localhost:8123/test/test-page.html</code>。
+      </p>
+      <pre id="p-copied" hidden>已复制：cd "&lt;扩展目录&gt;" &amp;&amp; python -m http.server 8123</pre>
+    </section>
+
+    <footer>
+      <button id="p-options" class="primary" type="button">打开完整设置</button>
+      <button id="p-selftest" class="ghost" type="button">运行自检</button>
+    </footer>
+    <pre id="p-out" class="out" hidden></pre>
+
+    <script src="src/settings.js"></script>
+    <script src="src/math.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

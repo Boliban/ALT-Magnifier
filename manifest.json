@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "ALT Magnifier",
   "short_name": "ALT Magnifier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "按住 Alt + 滚轮，像放大图片一样整体放大网页：以鼠标为锚点、不重排、元素位置零漂移。",
+  "homepage_url": "https://github.com/Boliban/ALT-Magnifier",
   "minimum_chrome_version": "121",
   "icons": {
     "16": "icons/icon16.png",
@@ -19,6 +20,16 @@
       "matches": ["http://*/*", "https://*/*", "file:///*"]
     }
   ],
+  "action": {
+    "default_title": "ALT Magnifier — 按住 Alt + 滚轮放大",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "background": {
     "service_worker": "background.js"
   },
