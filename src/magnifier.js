@@ -142,10 +142,9 @@
   // 退出时按保存的原值逐条精确还原。
   const OVERLAY_TAGS = { IMG: 1, VIDEO: 1, CANVAS: 1, IFRAME: 1, SVG: 1, INPUT: 1, TEXTAREA: 1, SELECT: 1 };
 
-  function scanOverlayBackgrounds(rect) {
+  function scanOverlayBackgrounds() {
     if (!cfg.fixFixedBackgrounds) return;
     const t0 = now();
-    const budget = 6; // ms
     let list;
     try {
       list = document.body ? document.body.querySelectorAll('*') : null;
@@ -153,8 +152,10 @@
       return;
     }
     if (!list) return;
+    const budget = 6; // ms：单帧最多花这么多时间，超了就分片到后续帧
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const rect = { x: 0, y: 0, w: vw, h: vh };
     for (let i = 0; i < list.length; i++) {
       if (now() - t0 > budget) {
         scanChunk(list, i, rect, vw, vh);
@@ -277,7 +278,9 @@
       // 指数逼近：约 110ms 收敛，慢帧自动加大步长，快速连滚时自然合并
       const alpha = 1 - Math.exp(-dt / 32);
       next = prev + (target - prev) * alpha;
-      if (Math.abs(target - next) < Math.abs(target) * 0.0008) next = target;
+      // 用绝对阈值收敛，而不是按倍率取相对值：
+      // 按 target*0.0008 算的话，32 倍时阈值高达 0.026，动画会提前「跳」到目标值。
+      if (Math.abs(target - next) < 0.001) next = target;
     } else {
       next = target === null ? prev : target;
       lastTs = 0;
@@ -334,13 +337,7 @@
     requestAnimationFrame(() => {
       scanPending = false;
       if (!active) return;
-      const sc = scroller();
-      scanOverlayBackgrounds({
-        x: sc.scrollLeft,
-        y: sc.scrollTop,
-        w: window.innerWidth,
-        h: window.innerHeight,
-      });
+      scanOverlayBackgrounds();
     });
   }
 
