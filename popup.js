@@ -20,6 +20,7 @@ const el = {
   selftest: document.getElementById('p-selftest'),
   dump: document.getElementById('p-dump'),
   toggle: document.getElementById('p-toggle'),
+  diag: document.getElementById('p-diag'),
   out: document.getElementById('p-out'),
 };
 
@@ -301,16 +302,184 @@ el.toggle.addEventListener('click', async () => {
   }
 });
 
-/* ------------------------------------------------- 启动时的安装健康检查 */
-function activeTab() {
+/* ============================================================ 分层自检
+ * 消息链路有 4 层，任何一层坏了症状都一样（都是「没反应」），
+ * 所以这里逐层单独测，并给出每层的结论：
+ *   1. 扩展自身上下文（storage）
+ *   2. 后台 service worker（消息）
+ *   3. 面板自己直接注入（chrome.scripting，绕开后台）
+ *   4. 内容脚本引擎（ping）
+ * 关键：第 3 层是**不依赖后台**的注入通道，后台挂了也能把扩展救回来。
+ */
+const INJECT_FILES = ['src/settings.js', 'src/hud.js', 'src/magnifier.js'];
+
+function storageSelfTest() {
+  return new Promise((res) => {
+    const probe = 'altmagProbe' + Date.now();
+    try {
+      chrome.storage.local.set({ [probe]: 1 }, () => {
+        if (chrome.runtime.lastError) return res({ ok: false, detail: chrome.runtime.lastError.message });
+        chrome.storage.local.get(probe, (data) => {
+          if (chrome.runtime.lastError) return res({ ok: false, detail: chrome.runtime.lastError.message });
+          const got = data && data[probe] === 1;
+          chrome.storage.local.remove(probe, () => {});
+          res({ ok: got, detail: got ? '读写正常' : '写入后读不回来' });
+        });
+      });
+    } catch (err) {
+      res({ ok: false, detail: (err && err.message) || String(err) });
+    }
+  });
+}
+
+function rawPing(tabId) {
   return new Promise((res) => {
     try {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (chrome.runtime.lastError) return res(null);
-        res((tabs && tabs[0]) || null);
+      chrome.tabs.sendMessage(tabId, { type: 'alt-magnifier:ping' }, (reply) => {
+        if (chrome.runtime.lastError) return res({ ok: false, detail: chrome.runtime.lastError.message });
+        res({ ok: !!(reply && reply.ok), reply: reply || null });
+      });
+    } catch (err) {
+      res({ ok: false, detail: (err && err.message) || String(err) });
+    }
+  });
+}
+
+/** 面板直接注入：不经过后台，后台挂了这条路仍然可用 */
+function directInject(tabId) {
+  return new Promise((res) => {
+    if (!chrome.scripting || !chrome.scripting.executeScript) {
+      return res({ ok: false, detail: 'chrome.scripting 不可用（扩展可能没拿到 scripting 权限）' });
+    }
+    try {
+      chrome.scripting.executeScript(
+        { target: { tabId, allFrames: true }, files: INJECT_FILES, injectImmediately: true },
+        (frames) => {
+          if (chrome.runtime.lastError) {
+            // allFrames 可能被某些 iframe 挡住，退一步只注顶层
+            chrome.scripting.executeScript(
+              { target: { tabId, allFrames: false }, files: INJECT_FILES, injectImmediately: true },
+              (f2) => {
+                if (chrome.runtime.lastError) return res({ ok: false, detail: chrome.runtime.lastError.message });
+                res({ ok: true, frames: (f2 && f2.length) || 1, note: '（只注入了顶层文档）' });
+              }
+            );
+            return;
+          }
+          res({ ok: true, frames: (frames && frames.length) || 1, note: '' });
+        }
+      );
+    } catch (err) {
+      res({ ok: false, detail: (err && err.message) || String(err) });
+    }
+  });
+}
+
+/** 当前标签页是不是可以注入的普通网页 */
+function injectable(url) {
+  return /^(https?|file):/i.test(url || '');
+}
+
+el.diag.addEventListener('click', async () => {
+  el.diag.disabled = true;
+  const lines = [];
+  try {
+    lines.push('浏览器 : ' + navigator.userAgent.replace(/^.*(Edg\/[\d.]+).*$/, '$1'));
+
+    // 层 1：扩展自身
+    const s1 = await storageSelfTest();
+    lines.push('层1 扩展上下文 storage : ' + (s1.ok ? '✓ ' : '✗ ') + s1.detail);
+
+    // 当前标签页
+    const tab = await activeTab();
+    lines.push('当前标签页 : ' + ((tab && tab.url) || '（拿不到）'));
+    if (!tab || tab.id == null) {
+      lines.push('× 当前不是普通网页，无法继续（扩展页 / edge:// / 新标签页都不行）');
+      render(lines, 'bad');
+      return;
+    }
+    if (!injectable(tab.url)) {
+      lines.push('× 该页面类型不允许注入：' + tab.url);
+      render(lines, 'bad');
+      return;
+    }
+
+    // 层 2：后台
+    setStatus('测试后台 service worker…');
+    const bg = await ask({ type: 'alt-magnifier:lastError' });
+    lines.push('层2 后台 service worker  : ' + (bg && bg.ok ? '✓ 有响应' : '✗ ' + ((bg && bg.detail) || '无响应')));
+
+    // 层 3：面板直接注入（不依赖后台）
+    setStatus('测试面板直接注入…');
+    const inj = await directInject(tab.id);
+    lines.push('层3 面板直接注入        : ' + (inj.ok ? '✓ 注入了 ' + inj.frames + ' 个文档 ' + inj.note : '✗ ' + inj.detail));
+
+    // 层 4：内容脚本
+    await new Promise((r) => setTimeout(r, 150));
+    let p = await rawPing(tab.id);
+    if (!p.ok) {
+      await new Promise((r) => setTimeout(r, 400));
+      p = await rawPing(tab.id);
+    }
+    lines.push('层4 内容脚本引擎        : ' + (p.ok ? '✓ 活着' + (p.reply ? ' ' + JSON.stringify(p.reply) : '') : '✗ ' + p.detail));
+
+    const verdict = p.ok
+      ? '✓ 引擎可以工作。现在直接按住 Alt + 滚轮试试；若仍无反应，再用「导出运行状态」看触发键。'
+      : inj.ok
+        ? '✗ 注入成功但引擎没响应 —— 说明脚本执行环境受限（企业策略 / 页面 CSP）。'
+        : '✗ 注入被浏览器拒绝 —— 原因见层3 的报错原文。';
+    lines.push('');
+    lines.push(verdict);
+    render(lines, p.ok ? 'ok' : 'bad');
+    setStatus(p.ok ? '✓ 引擎就绪，可以试 Alt + 滚轮了' : '✗ 有一层坏了，看下面的详情', p.ok ? 'ok' : 'bad');
+  } catch (err) {
+    lines.push('自检自身抛异常: ' + ((err && err.stack) || err));
+    render(lines, 'bad');
+  } finally {
+    el.diag.disabled = false;
+  }
+
+  function render(ls, kind) {
+    showReport('分层自检（把这段发我）', ls.join('\n'), kind);
+    try {
+      navigator.clipboard.writeText(ls.join('\n'));
+    } catch (_) {}
+  }
+});
+
+/* ------------------------------------------------- 启动时的安装健康检查 */
+/** 从标签页列表里挑出可以注入的当前标签页（纯函数，方便单测）
+ *  这里刻意**不**用 {active:true, currentWindow:true}：
+ *  多窗口、或当前窗口的活动标签是扩展页/新标签页时，
+ *  那个查询会返回一个不可注入的标签页，消息发过去就石沉大海，
+ *  调用方只会看到 "message port closed"，完全不知道原因。 */
+function pickInjectable(tabs) {
+  const list = (tabs || []).filter((t) => t && t.id != null && injectable(t.url));
+  if (!list.length) return null;
+  return list.find((t) => t.active) || list[0];
+}
+
+function activeTab() {
+  return new Promise((res) => {
+    const finish = (tabs) => {
+      if (tabs && tabs.length) return res(pickInjectable(tabs));
+      // 一个可注入的都没有：退回「最后一个聚焦窗口」再找一次
+      try {
+        chrome.windows.getLastFocused({ populate: true }, (win) => {
+          if (chrome.runtime.lastError || !win || !win.tabs) return res(null);
+          res(pickInjectable(win.tabs));
+        });
+      } catch (_) {
+        res(null);
+      }
+    };
+    try {
+      chrome.tabs.query({}, (tabs) => {
+        if (chrome.runtime.lastError) return finish(null);
+        finish(tabs);
       });
     } catch (_) {
-      res(null);
+      finish(null);
     }
   });
 }

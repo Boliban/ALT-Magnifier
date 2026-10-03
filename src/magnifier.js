@@ -397,8 +397,14 @@
 
   // ------------------------------------------------------------------ 进入 / 退出
   function beginMagnify() {
-    if (active || !cfg.enabled || !siteOK) return;
-    if (!ROOT) return;
+    if (active || !cfg.enabled || !siteOK) {
+      log('beginMagnify 被拒绝', { active: active, enabled: cfg.enabled, siteOK: siteOK });
+      return;
+    }
+    if (!ROOT) {
+      log('beginMagnify 被拒绝：documentElement 不存在');
+      return;
+    }
     const sc = scroller();
     active = true;
     anchor = {
@@ -524,7 +530,14 @@
     // 这里只做兜底：如果真收到了就直接阻断，避免和浏览器缩放叠加。
     e.preventDefault();
     e.stopPropagation();
+    try {
+      handleWheel(e);
+    } catch (err) {
+      reportError('wheel', err);
+    }
+  }
 
+  function handleWheel(e) {
     // 步进方向
     let dir = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
     if (e.deltaY === 0) dir = e.deltaX < 0 ? 1 : e.deltaX > 0 ? -1 : 0;
@@ -538,7 +551,10 @@
         return;
       }
       beginMagnify();
-      if (!active) return;
+      if (!active) {
+        log('滚轮触发了 beginMagnify，但没进入放大态');
+        return;
+      }
     }
 
     try {
@@ -554,7 +570,7 @@
     if (isModifierKey(e)) {
       // 注意：这里绝对不能动 lastPointer —— 它保存的是鼠标真实位置，
       // 是「以鼠标为锚点」的唯一来源。覆盖它会让放大锚点跑到屏幕中心。
-      keyDown = true;
+      if (!keyDown) keyDown = true;
       return;
     }
     if (e.key === 'Escape' && active) {

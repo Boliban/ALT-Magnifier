@@ -59,15 +59,17 @@
     </section>
 
     <footer>
-      <button id="p-options" class="primary" type="button">打开完整设置</button>
-      <button id="p-selftest" class="ghost" type="button">运行自检</button>
+      <button id="p-diag" class="primary" type="button">分层自检</button>
+      <button id="p-options" class="ghost" type="button">完整设置</button>
     </footer>
     <footer class="tight">
       <button id="p-dump" class="ghost" type="button">导出运行状态</button>
       <button id="p-toggle" class="ghost" type="button">强制开/关放大</button>
+      <button id="p-selftest" class="ghost" type="button">数学自检</button>
     </footer>
     <p class="note" id="p-tip">
-      滚轮没反应时：先在网页上试 <kbd>Alt</kbd>+<kbd>W</kbd>（不依赖滚轮）。若它有反应，说明引擎正常、问题只在滚轮事件上。
+      滚轮没反应时按顺序试：①网页上按 <kbd>Alt</kbd>+<kbd>W</kbd>（不依赖滚轮）
+      ②点「分层自检」定位坏在哪一层 ③点「导出运行状态」看触发键与站点规则。
     </p>
     <pre id="p-out" class="out" hidden></pre>
 
