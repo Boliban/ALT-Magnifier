@@ -211,7 +211,7 @@ scrollLeft' = d * k' - clientX        // 换新倍率后让它回到同一个屏
 ### 目录结构
 
 ```
-manifest.json          MV3 清单：唯一权限 storage；声明 action（工具栏按钮）与 popup
+manifest.json          MV3 清单：权限 storage + scripting；声明 action（工具栏按钮）与 popup
 background.js          service worker：只在安装时写默认设置
 popup.html/.css/.js    工具栏面板：开关、倍率、触发键、测试页入口、健康检查、一键自检
 src/math.js            核心数学（纯函数，可在 Node 里单测）
