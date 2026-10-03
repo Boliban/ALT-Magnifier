@@ -5,391 +5,330 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ALT Magnifier — 验收测试页</title>
     <style>
+      /* 这一版刻意保持简单：没有 backdrop-filter、没有全屏渐变、没有动画，
+         所有内容都在正常文档流里，避免「页面自身的渲染叠加」被误认成扩展的锅。 */
       :root {
-        --line: #dfe3ea;
-        --fg: #1b1f26;
-        --muted: #6b7280;
-        --accent: #3b6ef6;
+        --line: #d8dde5;
+        --fg: #16181d;
+        --muted: #666e7a;
+        --accent: #2f5fe0;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
+        background: #fff;
         color: var(--fg);
-        font: 15px/1.75 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
-        /* 网格底：放大后可以直观看出「整体缩放」而不是「重排」 */
-        background-color: #fbfbfd;
+        font: 15px/1.7 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+      }
+
+      /* 只用一层极淡的网格线做标尺，方便肉眼判断「整体缩放」 */
+      .grid-lines {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
         background-image:
-          linear-gradient(rgba(59, 110, 246, 0.09) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(59, 110, 246, 0.09) 1px, transparent 1px);
-        background-size: 40px 40px;
+          linear-gradient(rgba(47, 95, 224, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(47, 95, 224, 0.07) 1px, transparent 1px);
+        background-size: 50px 50px;
+        z-index: 0;
       }
 
-      /* ---------- fixed 元素（放大后应随画面一起滚走） ---------- */
-      .fixed-bar {
+      /* fixed 元素：贴底放，避免遮挡正文（README 里说明了它的预期行为） */
+      .fixed-bottom {
         position: fixed;
-        top: 0; left: 0; right: 0;
-        z-index: 50;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 10px 16px;
-        background: rgba(27, 31, 38, 0.9);
+        left: 0; right: 0; bottom: 0;
+        z-index: 40;
+        padding: 7px 14px;
+        background: #16181d;
         color: #fff;
-        font-size: 13px;
-        backdrop-filter: blur(4px);
+        font: 12px/1.5 ui-monospace, Consolas, monospace;
       }
-      .fixed-bar b { color: #ffb04a; }
-      .fixed-ball {
-        position: fixed;
-        right: 18px; bottom: 18px;
-        z-index: 50;
-        padding: 12px 16px;
-        border-radius: 999px;
-        background: var(--accent);
-        color: #fff;
-        font-size: 13px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-      }
+      .fixed-bottom b { color: #ffb04a; }
 
-      /* ---------- 布局 ---------- */
-      .shell {
-        display: grid;
-        grid-template-columns: 230px minmax(0, 1fr);
-        gap: 26px;
-        max-width: 1180px;
+      .page {
+        position: relative;
+        z-index: 1;
+        max-width: 980px;
         margin: 0 auto;
-        padding: 92px 22px 60px;
+        padding: 26px 22px 90px;
       }
-      .sticky-side {
+
+      h1 { font-size: 22px; margin: 0 0 6px; }
+      h2 { font-size: 16px; margin: 30px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+      h2:first-of-type { border-top: 0; }
+      p { margin: 0 0 12px; }
+      code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #f2f4f8; padding: 1px 5px; border-radius: 5px; }
+      kbd {
+        display: inline-block; padding: 1px 6px;
+        border: 1px solid var(--line); border-bottom-width: 2px;
+        border-radius: 5px; background: #f7f8fa;
+        font: 600 12px/1.5 ui-monospace, Consolas, monospace;
+      }
+      .muted { color: var(--muted); font-size: 13px; }
+
+      .sticky-note {
         position: sticky;
-        top: 74px;
-        align-self: start;
-        padding: 14px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: #fff;
+        top: 0;
+        z-index: 30;
+        margin: 0 0 16px;
+        padding: 8px 12px;
+        background: #fff6e0;
+        border: 1px solid #f0d59a;
+        border-radius: 8px;
         font-size: 13px;
       }
-      .sticky-side ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
-      .sticky-side li { margin: 4px 0; }
-      .sticky-side .tag {
-        display: inline-block;
-        padding: 1px 7px;
-        border-radius: 6px;
-        background: rgba(59, 110, 246, 0.12);
-        color: var(--accent);
-        font: 600 11px/1.6 ui-monospace, Consolas, monospace;
-      }
 
-      main { min-width: 0; }
-      section {
-        background: #fff;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 18px 20px;
-        margin-bottom: 20px;
-      }
-      h2 { margin: 0 0 10px; font-size: 17px; }
-      h3 { margin: 18px 0 8px; font-size: 14px; color: var(--muted); }
-      p { margin: 0 0 12px; }
-      code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #f1f3f7; padding: 1px 5px; border-radius: 5px; }
-
-      /* 带序号的量尺：每格 100px，放大后每格都应变成 100k px */
       .ruler {
         display: flex;
-        height: 26px;
+        height: 24px;
+        margin: 8px 0 18px;
         border: 1px solid var(--line);
         border-radius: 6px;
         overflow: hidden;
-        margin: 6px 0 16px;
-        font: 600 10px/26px ui-monospace, Consolas, monospace;
+        font: 600 10px/24px ui-monospace, Consolas, monospace;
         color: var(--muted);
         text-align: center;
       }
       .ruler span { flex: 0 0 100px; border-right: 1px dashed var(--line); }
 
-      /* 定标方块：靠自动检测读出精确数值 */
-      .marks { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 4px; }
+      .marks { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
       .mark {
         width: 60px; height: 60px;
+        display: grid; place-items: center;
         border: 2px solid var(--accent);
         border-radius: 8px;
-        display: grid;
-        place-items: center;
-        font: 600 11px/1 ui-monospace, Consolas, monospace;
+        background: #eef2fd;
         color: var(--accent);
-        background: rgba(59, 110, 246, 0.06);
+        font: 600 11px/1 ui-monospace, Consolas, monospace;
       }
-      .mark.m2 { border-color: #e0533d; color: #e0533d; background: rgba(224, 83, 61, 0.07); }
-      .mark.m3 { border-color: #1a9e63; color: #1a9e63; background: rgba(26, 158, 99, 0.07); }
-      .mark.m4 { border-color: #8b5cf6; color: #8b5cf6; background: rgba(139, 92, 246, 0.07); }
+      .mark.b { border-color: #cf3d24; background: #fdeeea; color: #cf3d24; }
+      .mark.c { border-color: #167a4c; background: #e9f7f0; color: #167a4c; }
+      .mark.d { border-color: #6b3fd4; background: #f1ecfd; color: #6b3fd4; }
 
-      /* fixed 背景大色块：验证定点修复 */
+      .imgbox { border: 2px solid #16181d; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+      .imgbox img { display: block; width: 100%; height: auto; }
+
       .bigbg {
-        height: 180px;
+        height: 150px;
         margin: 12px 0;
-        border-radius: 12px;
-        border: 3px solid #1b1f26;
+        border: 3px solid #16181d;
+        border-radius: 10px;
         display: grid;
         place-items: center;
         color: #fff;
-        font: 700 15px/1.5 ui-monospace, Consolas, monospace;
-        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-        background-image:
-          repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.35) 0 12px, transparent 12px 24px),
-          linear-gradient(135deg, #3b6ef6, #8b5cf6 55%, #ffb04a);
-        background-attachment: fixed; /* ← 关键：这就是 B站图文页那类“大糊背景”的写法 */
-        background-size: cover;
-        background-position: center;
+        font: 700 14px/1.5 ui-monospace, Consolas, monospace;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        background-color: #2f5fe0;
+        background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.45) 0 10px, transparent 10px 20px);
+        background-attachment: fixed;
       }
+      .bigbg.off { background-attachment: scroll; }
 
-      /* 内嵌滚动容器 */
       .scroller {
-        height: 150px;
+        height: 140px;
         overflow: auto;
-        border: 2px dashed #8b5cf6;
-        border-radius: 10px;
         padding: 10px 12px;
-        background: rgba(139, 92, 246, 0.05);
+        border: 2px dashed #6b3fd4;
+        border-radius: 10px;
+        background: #faf8ff;
       }
-      .scroller .inner { height: 420px; }
+      .scroller .inner { height: 380px; }
 
-      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
-      .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: #1b1f26;
-        color: #fff;
-        font: 600 11px/1.7 ui-monospace, Consolas, monospace;
-      }
-      iframe { border: 2px solid #1a9e63; border-radius: 10px; background: #fff; }
-      canvas { border: 1px solid var(--line); border-radius: 8px; display: block; }
-      table { border-collapse: collapse; width: 100%; font-size: 14px; }
+      table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 10px 0; }
       th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
-      th { background: #f6f7fa; }
-      .tall { height: 220px; }
+      th { background: #f4f6f9; }
 
-      /* 长文：验证放开倍率后文字是否保持「字不动、四周扩张」 */
+      canvas { display: block; border: 1px solid var(--line); border-radius: 8px; }
+      svg { display: block; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+      iframe { display: block; width: 340px; height: 170px; border: 2px solid #167a4c; border-radius: 10px; background: #fff; }
+
+      .pin { background: #ffe066; border-bottom: 2px solid #cf3d24; padding: 0 2px; }
       .prose p { margin: 0 0 14px; }
-      .prose .pin {
-        background: #ffe066;
-        border-bottom: 2px solid #e0533d;
-        padding: 0 2px;
-      }
 
-      /* 页面自己画的自动检测面板 */
-      #mag-test-panel {
+      /* 页内检测面板：贴左上角 */
+      #mag-panel {
         position: fixed;
-        left: 12px; bottom: 12px;
+        left: 10px; top: 10px;
         z-index: 60;
-        width: 340px;
-        max-height: 42vh;
+        width: 320px;
+        max-height: 38vh;
         overflow: auto;
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: rgba(17, 20, 26, 0.92);
-        color: #e8ebf0;
-        font: 12px/1.65 ui-monospace, Consolas, monospace;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: #16181d;
+        color: #e7ebf1;
+        font: 11.5px/1.6 ui-monospace, Consolas, monospace;
         white-space: pre-wrap;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
       }
-      #mag-test-panel b { color: #ffb04a; }
-      #mag-test-panel .ok { color: #4ade80; }
-      #mag-test-panel .bad { color: #ff6b6b; }
-
-      #mag-test-panel .lead {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 8px;
-      }
-      #mag-test-panel button {
-        font: inherit;
-        font-size: 11px;
-        color: #e8ebf0;
+      #mag-panel .ok { color: #57d98f; }
+      #mag-panel .bad { color: #ff7b6b; }
+      #mag-panel b { color: #ffb04a; }
+      #mag-panel .lead { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; }
+      #mag-panel button {
+        font: inherit; font-size: 11px; color: #e7ebf1; cursor: pointer;
         background: rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        border-radius: 6px;
-        padding: 3px 8px;
-        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 6px; padding: 3px 8px;
       }
     </style>
   </head>
   <body>
-    <!-- ============ fixed 元素 ============ -->
-    <div class="fixed-bar" data-mag-test>
-      <span class="badge">position: fixed</span>
-      <span>顶栏 —— 放大后应随画面一起滚走，而不是永远钉在屏幕顶端</span>
-      <b id="fb-scroll">scroll 0, 0</b>
-    </div>
-    <div class="fixed-ball" data-mag-test>position: fixed 悬浮球</div>
+    <div class="grid-lines" aria-hidden="true"></div>
 
-    <div class="shell">
-      <!-- ============ sticky 元素 ============ -->
-      <aside class="sticky-side" data-mag-test>
-        <span class="tag">position: sticky</span>
-        <ol>
-          <li>定点文字对齐</li>
-          <li>fixed 背景色块</li>
-          <li>内嵌滚动容器</li>
-          <li>iframe 同步性</li>
-          <li>canvas / svg 清晰度</li>
-          <li>大倍率下的滚动条</li>
-        </ol>
-        <p style="margin-top:10px;color:var(--muted)">
-          放大后它同样应该随画面滚走（这是「图片式放大」的定义）。
-        </p>
-      </aside>
-
-      <main>
-        <section>
-          <h2>1. 定点文字对齐（最重要）</h2>
-          <p>
-            把鼠标停在下面这句子里<b>任意一个字</b>上，按住 <code>Alt</code> 向下滚。
-            那个字必须<b>纹丝不动</b>，只有它周围的内容向外扩张。松手后页面应回到原处。
-          </p>
-          <p class="prose" style="font-size:19px;line-height:2">
-            敏捷的棕色狐狸跳过了那只懒狗
-            <span class="pin">Sphinx of black quartz, judge my vow</span>
-            0123456789 —— 0O1lI| 易混字符，放大后字形相对位置不得变化。
-          </p>
-          <div class="ruler" data-mag-test>
-            <span>100</span><span>200</span><span>300</span><span>400</span><span>500</span>
-            <span>600</span><span>700</span><span>800</span><span>900</span><span>1000</span>
-          </div>
-          <div class="marks">
-            <div class="mark" id="mk1" data-mag-test>mk1</div>
-            <div class="mark m2" id="mk2" data-mag-test>mk2</div>
-            <div class="mark m3" id="mk3" data-mag-test>mk3</div>
-            <div class="mark m4" id="mk4" data-mag-test>mk4</div>
-          </div>
-          <p style="color:var(--muted);font-size:13px;margin-top:10px">
-            四个 60×60 定标方块用于自动检测：放大 k 倍后它们必须精确变成 60k×60k，且位置满足绕锚点的比例关系。
-          </p>
-        </section>
-
-        <section>
-          <h2>2. <code>background-attachment: fixed</code> 大色块</h2>
-          <p>
-            这个色块用的是 <code>background-attachment: fixed</code>（B站图文页那种大糊背景的写法）。
-            开启扩展设置里的「修复固定背景」后，放大时它的纹理必须和边框严丝合缝；关掉开关再试一次，会看到明显的错位——
-            这就是之前元素「脱离原位」的元凶之一。
-          </p>
-          <div class="bigbg" data-mag-test>background-attachment: fixed</div>
-        </section>
-
-        <section>
-          <h2>3. 内嵌滚动容器</h2>
-          <p>虚线框内部可以独立滚动。放大时它内部的内容同样应被整体放大，比例与外层完全一致。</p>
-          <div class="scroller" data-mag-test id="scroller">
-            <p><b>内嵌滚动容器</b>：滚轮默认只作用于页面缩放，容器内部请用拖动滚动条或方向键。</p>
-            <p>内部第 2 段：敏捷的棕色狐狸。</p>
-            <p>内部第 3 段：Sphinx of black quartz.</p>
-            <div class="inner">
-              <p style="margin-top:200px">内部第 4 段（需要滚动才可见）：0123456789。</p>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2>4. iframe 与页面其余部分的比例一致性</h2>
-          <div class="row">
-            <iframe
-              title="内联测试 iframe"
-              width="330"
-              height="180"
-              srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>
-                body{margin:0;font:14px/1.7 system-ui,sans-serif;color:#1b1f26}
-                .bar{position:fixed;top:0;left:0;right:0;background:#1a9e63;color:#fff;font:600 12px/2 ui-monospace,monospace;padding:0 8px}
-                .pad{padding:34px 10px 10px}
-                p{margin:0 0 8px}
-              </style></head><body>
-                <div class='bar'>iframe 内部的 position: fixed</div>
-                <div class='pad'>
-                  <p>iframe 内部文字</p>
-                  <p>敏捷的棕色狐狸 0123456789</p>
-                  <p style='height:60px'>内联 iframe 的滚动测试</p>
-                </div>
-              </body></html>"
-            ></iframe>
-            <div style="flex:1;min-width:240px">
-              <p>
-                iframe 的内容由独立文档渲染。放大时它与外层文本的字号比例必须保持不变——
-                如果 iframe 里的字比外面大/小，就说明缩放只作用在了一层。
-              </p>
-              <p><span class="badge">对比</span> iframe 里的 14px 与这里的 15px 放大后仍应接近 1:1。</p>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2>5. 位图与矢量：canvas / svg</h2>
-          <div class="row">
-            <div>
-              <canvas id="cv" width="300" height="170" data-mag-test></canvas>
-              <p style="font-size:12px;color:var(--muted)">canvas 每帧重绘（模拟视频/游戏画面），放大时不得撕裂或错位。</p>
-            </div>
-            <svg width="300" height="170" viewBox="0 0 300 170" data-mag-test style="border:1px solid var(--line);border-radius:8px">
-              <rect x="6" y="6" width="288" height="158" rx="10" fill="none" stroke="#3b6ef6" stroke-width="2" />
-              <circle cx="80" cy="85" r="44" fill="rgba(59,110,246,.28)" stroke="#3b6ef6" stroke-width="2" />
-              <path d="M14 148 L90 40 L166 118 L288 22" fill="none" stroke="#ffb04a" stroke-width="3" />
-              <text x="150" y="96" font-family="Consolas, monospace" font-size="15" fill="#1b1f26" text-anchor="middle">SVG</text>
-            </svg>
-          </div>
-        </section>
-
-        <section class="tall">
-          <h2>6. 表格与列表</h2>
-          <table data-mag-test>
-            <tr><th>缩放倍率</th><th>预期宽度（100px 定标）</th><th>备注</th></tr>
-            <tr><td>1×</td><td>100px</td><td>基准</td></tr>
-            <tr><td>2×</td><td>200px</td><td>元素位置比例不变</td></tr>
-            <tr><td>8×</td><td>800px</td><td>需横向滚动查看</td></tr>
-            <tr><td>32×</td><td>3200px</td><td>极限倍率，验证不卡死</td></tr>
-          </table>
-          <ul>
-            <li>列表项：项目符号与文字基线在放大后必须对齐</li>
-            <li>列表项：行高按比例放大，不出现半像素模糊</li>
-            <li>列表项：超长文本 <code>https://example.com/a/very/long/url/that/should/not/wrap/weirdly?q=1&amp;r=2</code></li>
-          </ul>
-        </section>
-
-        <section class="prose">
-          <h2>7. 长文：连续滚轮 30 格不漂移</h2>
-          <p>
-            这一段用来做「累计误差」测试：把鼠标固定在屏幕正中偏左的某个字上，
-            连续滚 20~30 格到很高的倍率，中途不要移动鼠标。如果实现里存在误差累积，
-            你会看到那个字慢慢「爬走」；正确的实现下它应该始终钉死在同一像素上。
-          </p>
-          <p>
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-          </p>
-          <p>
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-          </p>
-          <p>
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-          </p>
-          <p>
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-          </p>
-          <p>
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-            重复的填充文字：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。
-          </p>
-        </section>
-      </main>
+    <div class="fixed-bottom" data-mag-test>
+      <span>position: fixed 贴底条 —— 放大后它是画面的一部分，<b>会跟着画面一起滚走</b></span>
+      <b id="fb">scroll 0, 0</b>
     </div>
 
-    <div id="mag-test-panel">
-      <div class="lead"><button type="button" id="mag-diag-link">载入扩展级检测</button><span>面板初始化中…</span></div>
+    <div class="page">
+      <h1>ALT Magnifier — 验收测试页</h1>
+      <p class="muted">
+        看左上角面板：显示「扩展已注入」才说明内容脚本在跑。若显示未注入，说明本页地址
+        （<code>file://</code>）没拿到扩展访问权限 —— 见 README 安装第 4 步，或改用
+        <code>python -m http.server 8123</code> 后访问 <code>http://localhost:8123/test/test-page.html</code>。
+      </p>
+
+      <div class="sticky-note" data-mag-test>
+        <b>position: sticky</b> 提示条：放大后它随画面一起滚走（这是「图片式放大」的定义）。
+      </div>
+
+      <h2>1. 定点文字对齐（最重要）</h2>
+      <p>
+        把鼠标停在下面任意一个字上，按住 <kbd>Alt</kbd> 向下滚。那个字必须<b>纹丝不动</b>，
+        只有它周围的内容向外扩张。松开 <kbd>Alt</kbd> 后画面落回原处。
+      </p>
+      <p class="prose" data-mag-test style="font-size: 19px; line-height: 2">
+        敏捷的棕色狐狸跳过了那只懒狗
+        <span class="pin">Sphinx of black quartz, judge my vow</span>
+        0123456789 —— 0O1lI| 易混字符，放大后字形相对位置不得变化。
+      </p>
+      <div class="ruler" data-mag-test>
+        <span>100</span><span>200</span><span>300</span><span>400</span><span>500</span>
+        <span>600</span><span>700</span><span>800</span><span>900</span>
+      </div>
+      <div class="marks">
+        <div class="mark" id="mk1" data-mag-test>mk1</div>
+        <div class="mark b" id="mk2" data-mag-test>mk2</div>
+        <div class="mark c" id="mk3" data-mag-test>mk3</div>
+        <div class="mark d" id="mk4" data-mag-test>mk4</div>
+      </div>
+      <p class="muted">四个 60×60 定标方块：放大 k 倍后必须精确变成 60k×60k，位置满足绕锚点的比例关系。</p>
+
+      <h2>2. 大图（位图缩放）</h2>
+      <div class="imgbox"><img data-mag-test id="bigimg" alt="位图测试图" width="960" height="240" /></div>
+      <p class="muted">这张图由本页用 canvas 现场生成（不依赖网络）。放大时应整体放大、边缘锐利、无重影。</p>
+
+      <h2>3. background-attachment: fixed 大色块</h2>
+      <p>
+        这块的背景用了 <code>background-attachment: fixed</code> —— B站图文页那种「大糊背景」的写法。
+        开启扩展设置里的「修复固定背景」后，放大时它的斜纹与黑边框必须严丝合缝。
+      </p>
+      <div class="bigbg" data-mag-test>background-attachment: fixed</div>
+      <p class="muted">对照组：同一背景改成 <code>scroll</code>，这一块任何时候都应该是对齐的。</p>
+      <div class="bigbg off" data-mag-test>background-attachment: scroll（对照）</div>
+
+      <h2>4. 内嵌滚动容器</h2>
+      <div class="scroller" data-mag-test>
+        <p><b>内嵌滚动容器</b>：放大时它内部内容也应按同一比例放大。</p>
+        <p>内部第 2 段：敏捷的棕色狐狸。</p>
+        <p>内部第 3 段：Sphinx of black quartz。</p>
+        <div class="inner"><p style="margin-top: 180px">内部第 4 段（需要滚动才可见）：0123456789。</p></div>
+      </div>
+
+      <h2>5. iframe 与外层同比例</h2>
+      <iframe
+        data-mag-test title="内联测试 iframe"
+        srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>
+          body{margin:0;font:14px/1.7 system-ui,sans-serif;color:#16181d}
+          p{margin:8px 10px}
+          b{color:#167a4c}
+        </style></head><body>
+          <p><b>iframe 内部</b></p>
+          <p>敏捷的棕色狐狸 0123456789</p>
+          <p>这里的 14px 与外面的 15px 放大后比例必须接近 1:1。</p>
+        </body></html>"
+      ></iframe>
+
+      <h2>6. canvas（每帧重绘）与 SVG</h2>
+      <canvas data-mag-test id="cv" width="420" height="150"></canvas>
+      <p class="muted" style="margin-top: 8px">canvas 每帧重绘，模拟视频/游戏画面：放大时不得撕裂、错位。</p>
+      <svg data-mag-test width="420" height="120" viewBox="0 0 420 120">
+        <rect x="5" y="5" width="410" height="110" rx="8" fill="none" stroke="#2f5fe0" stroke-width="2" />
+        <circle cx="80" cy="60" r="40" fill="rgba(47,95,224,.25)" stroke="#2f5fe0" stroke-width="2" />
+        <path d="M10 105 L110 25 L220 95 L410 15" fill="none" stroke="#ffb04a" stroke-width="3" />
+        <text x="210" y="68" font-family="Consolas, monospace" font-size="15" fill="#16181d" text-anchor="middle">SVG 矢量</text>
+      </svg>
+
+      <h2>7. 表格与列表</h2>
+      <table data-mag-test>
+        <tr><th>缩放倍率</th><th>预期宽度（100px 定标）</th><th>备注</th></tr>
+        <tr><td>1×</td><td>100px</td><td>基准</td></tr>
+        <tr><td>2×</td><td>200px</td><td>元素位置比例不变</td></tr>
+        <tr><td>8×</td><td>800px</td><td>需横向滚动查看</td></tr>
+        <tr><td>32×</td><td>3200px</td><td>极限倍率，验证不卡死</td></tr>
+      </table>
+      <ul>
+        <li>列表项：项目符号与文字基线在放大后必须对齐</li>
+        <li>列表项：行高按比例放大，不出现半像素模糊</li>
+        <li>列表项：超长文本 <code>https://example.com/a/very/long/url/that/should/not/wrap/weirdly?q=1&amp;r=2</code></li>
+      </ul>
+
+      <h2>8. 长文：连续滚轮不漂移</h2>
+      <p class="prose">
+        把鼠标固定在屏幕中偏左的某个字上，连续滚 20~30 格到很高的倍率，中途不要移动鼠标。
+        如果实现里存在误差累积，你会看到那个字慢慢「爬走」；正确的实现下它应该始终钉在同一像素上。
+      </p>
+      <p class="prose">填充文字一：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字二：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字三：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字四：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字五：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字六：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字七：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+      <p class="prose">填充文字八：敏捷的棕色狐狸跳过了那只懒狗。0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ。</p>
+    </div>
+
+    <div id="mag-panel">
+      <div class="lead"><button type="button" id="mag-diag-link">载入扩展级检测</button><span id="mag-lead">检查扩展是否注入…</span></div>
+      <div class="out" id="mag-out"></div>
     </div>
 
     <script src="detect.js"></script>
+    <script>
+      // 现场生成测试图，避免依赖网络资源
+      (function () {
+        const img = document.getElementById('bigimg');
+        const c = document.createElement('canvas');
+        c.width = 960;
+        c.height = 240;
+        const g = c.getContext('2d');
+        const grd = g.createLinearGradient(0, 0, 960, 240);
+        grd.addColorStop(0, '#2f5fe0');
+        grd.addColorStop(0.55, '#6b3fd4');
+        grd.addColorStop(1, '#ffb04a');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 960, 240);
+        g.strokeStyle = 'rgba(255,255,255,.85)';
+        g.lineWidth = 2;
+        for (let x = 0; x <= 960; x += 40) {
+          g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, 240); g.stroke();
+        }
+        for (let y = 0; y <= 240; y += 40) {
+          g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(960, y + 0.5); g.stroke();
+        }
+        g.fillStyle = '#fff';
+        g.font = '700 30px Consolas, monospace';
+        g.fillText('BITMAP 960 × 240', 30, 130);
+        g.font = '600 18px Consolas, monospace';
+        g.fillText('40px 网格：放大后每格都必须变成 40k px', 30, 170);
+        // 细密条纹：任何重影/采样错误都会立刻变成摩尔纹
+        for (let i = 0; i < 960; i += 4) {
+          g.fillStyle = i % 8 === 0 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.25)';
+          g.fillRect(i, 200, 2, 40);
+        }
+        img.src = c.toDataURL('image/png');
+      })();
+    </script>
   </body>
 </html>

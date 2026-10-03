@@ -8,7 +8,8 @@
 'use strict';
 
 (function () {
-  const panel = document.getElementById('mag-test-panel');
+  const panel = document.getElementById('mag-panel');
+  const lead = document.getElementById('mag-lead');
   const TOL = 1.5; // 位移容差（px）
   const SEL = '[data-mag-test]';
 
@@ -79,7 +80,11 @@
         y: r.top,
         w: r.width,
         h: r.height,
-        fixed: cs.position === 'fixed' || cs.position === 'sticky' || el.classList.contains('fixed-bar') || el.classList.contains('fixed-ball'),
+        fixed:
+          cs.position === 'fixed' ||
+          cs.position === 'sticky' ||
+          el.classList.contains('fixed-bottom') ||
+          el.classList.contains('sticky-note'),
       });
     });
     return out;
@@ -184,7 +189,7 @@
   }
 
   function onScroll() {
-    const fb = document.getElementById('fb-scroll');
+    const fb = document.getElementById('fb');
     if (fb) fb.textContent = 'scroll ' + Math.round(window.scrollX) + ', ' + Math.round(window.scrollY);
   }
 
@@ -232,6 +237,43 @@
       '2) 松开 Alt，本面板会自动给出「实测倍率」与位移清单\n' +
       '3) 装好扩展后，点上面的「载入扩展级检测」，可再做一次独立取证的交叉验证'
   );
+
+  /* ---- 首要诊断：内容脚本到底有没有注入到本页 ----
+     内容脚本运行在扩展的隔离世界，页面脚本（本文件）看不到它的变量；
+     所以这里用「Alt 按下后页面根元素是否被写入 transform」来判断，
+     同时给出最可能的原因，避免用户在「扩展没注入」的状态下白试。 */
+  (function checkInjection() {
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key !== 'Alt' && e.key !== 'Control') return;
+        setTimeout(() => {
+          const t = document.documentElement.style.getPropertyValue('transform');
+          const live = /scale\(/.test(t) || !!document.getElementById('alt-magnifier-hud');
+          if (!live) {
+            lead.innerHTML =
+              '<span class="bad">未检测到扩展</span>';
+            say(
+              '<span class="bad">内容脚本没有注入到本页。</span>\n\n' +
+                '最可能的原因（按概率排序）：\n' +
+                '1. 本页是 file:// 打开，而扩展详情页里的\n' +
+                '   「允许访问文件 URL」没打开\n' +
+                '2. 扩展被停用，或代码改动后没有点「重新加载」\n' +
+                '3. 设置页里「启用扩展」被关掉了\n\n' +
+                '最快的排除方法：在扩展目录执行\n' +
+                '  python -m http.server 8123\n' +
+                '然后访问 http://localhost:8123/test/test-page.html\n' +
+                '如果这里能用、file:// 不能用，就是原因 1。'
+            );
+          }
+        }, 260);
+      },
+      true
+    );
+    setTimeout(() => {
+      lead.innerHTML = '按 <b>Alt</b> + 滚轮 → 自动出报告';
+    }, 300);
+  })();
   window.__magTestBaseline = function (x, y) {
     armed = true;
     wheelSeen = true;
